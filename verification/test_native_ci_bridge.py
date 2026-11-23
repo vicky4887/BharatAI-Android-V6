@@ -4,12 +4,14 @@ R=pathlib.Path(__file__).resolve().parents[1]
 class NativeCIBridgeTests(unittest.TestCase):
  def test_workflow_registered(self):
   w=(R/'.github/workflows/build-v6-native-apk.yml').read_text()
-  for t in ('workflow_dispatch:', 'runs-on: ubuntu-24.04', 'java-version:', "'17'", 'setup-android@v3', 'ndk;27.2.12479018', 'cmake;3.22.1', 'build_native_ci.sh'):
+  for t in ('workflow_dispatch:', 'runs-on: ubuntu-24.04', 'java-version:', "'17'", 'setup-android@v4', 'ndk;27.2.12479018', 'cmake;3.22.1', 'build_native_ci.sh'):
    self.assertIn(t,w)
  def test_native_required_and_artifact_verified(self):
   w=(R/'.github/workflows/build-v6-native-apk.yml').read_text()
   b=(R/'scripts/build_native_ci.sh').read_text()
   self.assertIn('-PbharataiNative=true', b)
+  self.assertIn("packages: ''",w)
+  self.assertNotIn('setup-android@v3',w)
   for t in ('lib/arm64-v8a/libbharatai_llm.so', 'upload-artifact@v4','if-no-files-found: error'):
    self.assertIn(t,w)
   self.assertIn('lib/arm64-v8a/libbharatai_llm.so', b)
