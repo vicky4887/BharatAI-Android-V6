@@ -1,0 +1,2 @@
+BharatAI Android Offline V6 — GitHub x86_64 Native Build Bridge 1 (23 Nov 2026)
+Fix: AAPT2_PROCESS_FIX

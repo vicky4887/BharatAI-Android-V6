@@ -1,0 +1,83 @@
+name: Build BharatAI V6 Native Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/build-v6-native-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bharatai-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-apk:
+    name: Android arm64-v8a JNI APK (x86_64 compiler host)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout app source (without GGUF)
+        uses: actions/checkout@v4
+
+      - name: Configure JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install official Android SDK, CMake, and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+          sdkmanager --sdk_root="$ANDROID_HOME" --install             'platforms;android-35' 'build-tools;35.0.1'             'ndk;27.2.12479018' 'cmake;3.22.1'
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "Android host architecture: $(uname -m)"
+
+      - name: Build native-enabled APK and unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build_native_ci.sh
+
+      - name: Require JNI library inside APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -Z1 "$APK" | grep -Fxq 'lib/arm64-v8a/libbharatai_llm.so'
+          if unzip -Z1 "$APK" | grep -Eq '^lib/x86_64/'; then
+            echo 'ERROR: Unexpected x86_64 device library packaged' >&2; exit 1
+          fi
+          mkdir -p dist
+          cp "$APK" dist/BharatAI-V6-Native-Offline-arm64-debug.apk
+          (cd dist && sha256sum BharatAI-V6-Native-Offline-arm64-debug.apk > SHA256SUMS.txt)
+          printf 'Build host: %s\nDevice ABI: arm64-v8a\nllama.cpp: v0.6.0\nAndroid NDK: 27.2.12479018\n' "$(uname -m)" > dist/BUILD_INFO.txt
+          cat dist/BUILD_INFO.txt
+          ls -lh dist
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BharatAI-V6-Native-Android-debug
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
